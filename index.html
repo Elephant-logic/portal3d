@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Portal World 3D</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; touch-action:none; }
+html,body { width:100%; height:100%; background:#000; overflow:hidden; }
+canvas { position:fixed; top:0; left:0; width:100%; height:100%; display:block; }
+
+/* World name */
+#worldname {
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  font-family:monospace; font-size:10px; letter-spacing:4px;
+  color:rgba(200,160,255,0.7); pointer-events:none; white-space:nowrap;
+}
+/* Crosshair */
+#xhair {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:16px; height:16px; pointer-events:none;
+}
+#xhair::before,#xhair::after {
+  content:''; position:absolute; background:rgba(255,255,255,0.5);
+}
+#xhair::before { width:1px; height:100%; left:50%; transform:translateX(-50%); }
+#xhair::after  { height:1px; width:100%; top:50%;  transform:translateY(-50%); }
+/* Coords */
+#coords {
+  position:fixed; bottom:160px; left:12px;
+  font-family:monospace; font-size:9px; color:rgba(255,255,255,0.3);
+  letter-spacing:1px; pointer-events:none;
+}
+/* Sliders toggle */
+#togglePanel {
+  position:fixed; top:14px; right:14px;
+  padding:8px 14px; background:rgba(0,0,0,0.6);
+  border:1px solid rgba(255,255,255,0.15); border-radius:6px;
+  color:rgba(255,255,255,0.55); font-family:monospace; font-size:9px;
+  letter-spacing:2px; cursor:pointer; z-index:10;
+}
+/* Sliders panel */
+#panel {
+  position:fixed; right:0; top:0; bottom:0; width:200px;
+  background:rgba(0,0,0,0.85); padding:12px 10px;
+  font-family:monospace; font-size:9px; color:rgba(255,255,255,0.55);
+  overflow-y:auto; display:none; letter-spacing:1px;
+  border-left:1px solid rgba(255,255,255,0.08); z-index:9;
+}
+#panel.open { display:block; }
+#panel h3 { font-size:8px; letter-spacing:3px; color:rgba(200,160,255,0.6); margin:10px 0 5px; }
+.sr { display:flex; align-items:center; gap:4px; margin:3px 0; }
+.sr label { width:68px; color:rgba(255,255,255,0.35); font-size:8px; }
+.sr input  { flex:1; }
+.pb {
+  display:block; width:100%; padding:5px; margin:2px 0;
+  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.09);
+  color:rgba(255,255,255,0.55); font-family:monospace; font-size:8px;
+  letter-spacing:2px; cursor:pointer; border-radius:3px; text-align:center;
+}
+.pb:hover { background:rgba(255,255,255,0.1); }
+
+/* ── NAV PAD (left, matching old portal) ── */
+#nav {
+  position:fixed;
+  bottom:10px;
+  left:10px;
+  display:grid;
+  grid-template-columns:repeat(3,52px);
+  grid-template-rows:repeat(2,52px);
+  gap:4px;
+}
+
+/* ── LOOK PAD (right, matching old portal) ── */
+#look {
+  position:fixed;
+  bottom:10px;
+  right:10px;
+  display:grid;
+  grid-template-columns:repeat(3,52px);
+  grid-template-rows:repeat(2,52px);
+  gap:4px;
+}
+
+button, .nb {
+  width:52px; height:52px;
+  border:1px solid rgba(255,255,255,0.18);
+  border-radius:9px;
+  background:rgba(255,255,255,0.10);
+  color:white;
+  font-size:11px;
+  font-family:monospace;
+  letter-spacing:0.5px;
+  cursor:pointer;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:manipulation;
+  display:flex; align-items:center; justify-content:center;
+}
+button.on, .nb.on { background:white; color:black; }
+button:active, .nb:active { background:rgba(255,255,255,0.3); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="worldname">PORTAL WORLD</div>
+<div id="xhair"></div>
+<div id="coords"></div>
+<button id="togglePanel" onclick="window._togglePanel()">SLIDERS</button>
+
+<div id="panel">
+  <h3>PORTAL</h3>
+  <div class="sr"><label>FLOW</label>    <input type="range" id="sl_FLOW"       min="-0.3" max="0.3"  step="0.01" value="0.03" oninput="window._sl('FLOW',+this.value)"></div>
+  <div class="sr"><label>ENTROPY</label> <input type="range" id="sl_TURB"       min="0"    max="1"    step="0.01" value="0"    oninput="window._sl('TURB',+this.value)"></div>
+  <div class="sr"><label>DIFF</label>    <input type="range" id="sl_DIFF"       min="0"    max="1"    step="0.01" value="0.12" oninput="window._sl('DIFF',+this.value)"></div>
+  <div class="sr"><label>CURL</label>    <input type="range" id="sl_SPIN_AMT"   min="0"    max="1"    step="0.01" value="0.05" oninput="window._sl('SPIN_AMT',+this.value)"></div>
+  <div class="sr"><label>LOCK</label>    <input type="range" id="sl_LOCK_DEPTH" min="0"    max="1"    step="0.01" value="0"    oninput="window._sl('LOCK_DEPTH',+this.value)"></div>
+  <div class="sr"><label>VORTEX</label>  <input type="range" id="sl_PULL"       min="0"    max="1"    step="0.01" value="0"    oninput="window._sl('PULL',+this.value)"></div>
+  <h3>WORLD</h3>
+  <div class="sr"><label>HSCALE</label>  <input type="range" id="sl_W_HSCALE"   min="0.3"  max="3"    step="0.05" value="1"    oninput="window._sl('W_HSCALE',+this.value)"></div>
+  <div class="sr"><label>GRAVITY</label> <input type="range" id="sl_W_GRAVITY"  min="0.1"  max="3"    step="0.05" value="1"    oninput="window._sl('W_GRAVITY',+this.value)"></div>
+  <h3>PRESETS</h3>
+  <button class="pb" onclick="window._preset('TERRAN')">TERRAN</button>
+  <button class="pb" onclick="window._preset('VOLCANIC')">VOLCANIC</button>
+  <button class="pb" onclick="window._preset('CRYSTAL')">CRYSTAL</button>
+  <button class="pb" onclick="window._preset('DESERT')">DESERT</button>
+  <button class="pb" onclick="window._preset('OCEAN')">OCEAN</button>
+  <button class="pb" onclick="window._preset('ARCTIC')">ARCTIC</button>
+  <button class="pb" onclick="window._preset('VORTEX')">VORTEX</button>
+  <button class="pb" onclick="window._preset('PULSE')">PULSE</button>
+</div>
+
+<!--
+  NAV pad (left): matches old portal layout
+  Row 1: [empty] [FWD] [empty]
+  Row 2: [LEFT]  [BACK] [RIGHT]
+-->
+<div id="nav">
+  <div></div>
+  <button id="bf">▲</button>
+  <div></div>
+  <button id="bl">◀</button>
+  <button id="bb">▼</button>
+  <button id="br">▶</button>
+</div>
+
+<!--
+  LOOK pad (right): matches old portal layout
+  Row 1: [empty] [UP]   [empty]
+  Row 2: [LEFT]  [DOWN] [RIGHT]
+-->
+<div id="look">
+  <div></div>
+  <button id="lup">▲</button>
+  <div></div>
+  <button id="lleft">◀</button>
+  <button id="ldown">▼</button>
+  <button id="lright">▶</button>
+</div>
+
+<script type="module">
+import { GL }               from './js/renderer/webgl.js';
+import { Camera }           from './js/renderer/camera.js';
+import { Vec3 }             from './js/math/vec3.js';
+import { PhysicsWorld }     from './js/physics/world.js';
+import { TerrainChunk }     from './js/world/terrain.js';
+import { SkyRenderer }      from './js/world/sky.js';
+import { PlayerController } from './js/world/player.js';
+import { TERRAIN_VERT, TERRAIN_FRAG } from './js/world/shaders.js';
+import { setSliders, PRESETS, worldName, fbmTerrain, getSeaLevel } from './js/world/vars.js';
+
+// ── CANVAS ────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+function resize(){
+  canvas.width  = canvas.clientWidth  * devicePixelRatio | 0;
+  canvas.height = canvas.clientHeight * devicePixelRatio | 0;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── ENGINE ────────────────────────────────────────────────────────────────
+const gl      = new GL(canvas);
+const camera  = new Camera();
+const physics = new PhysicsWorld();
+const terrain = new TerrainChunk(gl);
+const sky     = new SkyRenderer(gl);
+const player  = new PlayerController(physics);
+const prog    = gl.createProgram(TERRAIN_VERT, TERRAIN_FRAG);
+
+camera.fovY = Math.PI / 2.5;
+camera.near = 0.3;
+camera.far  = 700;
+
+player.spawnOnTerrain();
+
+// ── INPUT ─────────────────────────────────────────────────────────────────
+// keys: persistent state driven by keyboard & touch buttons
+// inp.lookDX/DY: accumulated per-frame deltas, cleared each frame
+const keys = { f:0,b:0,l:0,r:0, lu:0,ld:0,ll:0,lr:0 };
+const inp  = {
+  fwd:false, back:false, left:false, right:false,
+  strafeL:false, strafeR:false, jump:false, sprint:false,
+  lookDX:0, lookDY:0
+};
+let lookTid=null, lookLX=0, lookLY=0;
+
+// Keyboard
+window.addEventListener('keydown', e=>{
+  if(e.code==='KeyW'||e.code==='ArrowUp')    keys.f=1;
+  if(e.code==='KeyS'||e.code==='ArrowDown')  keys.b=1;
+  if(e.code==='KeyA'||e.code==='ArrowLeft')  keys.l=1;
+  if(e.code==='KeyD'||e.code==='ArrowRight') keys.r=1;
+  if(e.code==='KeyQ') keys.lu=1;
+  if(e.code==='KeyE') keys.ld=1;
+  if(e.code==='Tab'){e.preventDefault(); window._togglePanel();}
+});
+window.addEventListener('keyup', e=>{
+  if(e.code==='KeyW'||e.code==='ArrowUp')    keys.f=0;
+  if(e.code==='KeyS'||e.code==='ArrowDown')  keys.b=0;
+  if(e.code==='KeyA'||e.code==='ArrowLeft')  keys.l=0;
+  if(e.code==='KeyD'||e.code==='ArrowRight') keys.r=0;
+  if(e.code==='KeyQ') keys.lu=0;
+  if(e.code==='KeyE') keys.ld=0;
+});
+
+// Screen buttons — same bindBtn pattern as old portal
+function bindBtn(id, k){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('pointerdown',  ()=>keys[k]=1);
+  el.addEventListener('pointerup',    ()=>keys[k]=0);
+  el.addEventListener('pointerleave', ()=>keys[k]=0);
+  el.addEventListener('pointercancel',()=>keys[k]=0);
+}
+bindBtn('bf',   'f');
+bindBtn('bb',   'b');
+bindBtn('bl',   'l');
+bindBtn('br',   'r');
+bindBtn('lup',  'lu');
+bindBtn('ldown','ld');
+bindBtn('lleft','ll');
+bindBtn('lright','lr');
+
+// Touch look on canvas
+canvas.addEventListener('touchstart', e=>{
+  for(const t of e.changedTouches){
+    if(t.clientY < canvas.clientHeight*0.75 && lookTid===null){
+      lookTid=t.identifier; lookLX=t.clientX; lookLY=t.clientY;
+    }
+  }
+  e.preventDefault();
+},{passive:false});
+canvas.addEventListener('touchmove', e=>{
+  for(const t of e.changedTouches){
+    if(t.identifier===lookTid){
+      inp.lookDX += t.clientX-lookLX;
+      inp.lookDY += t.clientY-lookLY;
+      lookLX=t.clientX; lookLY=t.clientY;
+    }
+  }
+  e.preventDefault();
+},{passive:false});
+canvas.addEventListener('touchend', e=>{
+  for(const t of e.changedTouches)
+    if(t.identifier===lookTid) lookTid=null;
+});
+
+// Pointer lock mouse look
+canvas.addEventListener('click', ()=>canvas.requestPointerLock());
+document.addEventListener('mousemove', e=>{
+  if(document.pointerLockElement===canvas){
+    inp.lookDX+=e.movementX; inp.lookDY+=e.movementY;
+  }
+});
+
+// Map keys → inp each frame (keyboard + look buttons both drive inp)
+function syncKeys(){
+  inp.fwd     = !!keys.f;
+  inp.back    = !!keys.b;
+  inp.left    = !!keys.l;
+  inp.right   = !!keys.r;
+  inp.sprint  = false;
+
+  // Look buttons drive look deltas
+  // yaw increase = turn LEFT, yaw decrease = turn RIGHT
+  const LOOK_SPEED = 6;
+  if(keys.lu) inp.lookDY -= LOOK_SPEED;   // look up
+  if(keys.ld) inp.lookDY += LOOK_SPEED;   // look down
+  if(keys.ll) inp.lookDX -= LOOK_SPEED;   // turn left  (yaw increases via -= lookDX in player)
+  if(keys.lr) inp.lookDX += LOOK_SPEED;   // turn right (yaw decreases via -= lookDX in player)
+}
+
+// ── SLIDERS & PRESETS ─────────────────────────────────────────────────────
+let panelOpen=false;
+window._togglePanel=()=>{
+  panelOpen=!panelOpen;
+  document.getElementById('panel').classList.toggle('open',panelOpen);
+};
+window._sl=(name,val)=>{
+  setSliders({[name]:val});
+  terrain._lastX=null;
+};
+window._preset=(name)=>{
+  const p=PRESETS[name]; if(!p) return;
+  setSliders(p);
+  for(const [k,v] of Object.entries(p)){
+    const el=document.getElementById('sl_'+k);
+    if(el) el.value=v;
+  }
+  terrain._lastX=null;
+  player.spawnOnTerrain();
+};
+
+// ── MAIN LOOP ─────────────────────────────────────────────────────────────
+let lastT=0;
+function loop(ts){
+  const dt=Math.min((ts-lastT)/1000, 0.05);
+  lastT=ts;
+
+  syncKeys();
+  sky.update(dt);
+  player.update(inp, dt);
+  terrain.update(player.position.x, player.position.z, 0);
+
+  // Camera from player
+  camera.setPosition(player.getCameraPosition());
+  camera.setOrientation(player.getCameraOrientation());
+  camera.setAspect(canvas.width/canvas.height);
+  camera.updateFrustum();
+
+  // ── RENDER ───────────────────────────────────────────────────────────────
+  const glc=gl.gl;
+  glc.viewport(0,0,canvas.width,canvas.height);
+  glc.clear(glc.COLOR_BUFFER_BIT|glc.DEPTH_BUFFER_BIT);
+
+  sky.draw(camera);
+
+  glc.enable(glc.DEPTH_TEST);
+  glc.depthFunc(glc.LEQUAL);
+  glc.enable(glc.BLEND);
+  glc.blendFunc(glc.SRC_ALPHA, glc.ONE_MINUS_SRC_ALPHA);
+  glc.enable(glc.CULL_FACE);
+  glc.cullFace(glc.BACK);
+
+  prog.use();
+  prog.setMat4('uView',     camera.viewMatrix);
+  prog.setMat4('uProj',     camera.projMatrix);
+  prog.setVec3('uCamPos',   camera.position);
+  prog.setVec3('uSunDir',   sky.getSunDir());
+  prog.setVec3('uSunColour',new Vec3(1.0,0.95,0.85));
+  prog.setFloat('uSunIntensity', sky.daylight*1.3);
+  prog.setVec3('uAmbient',  new Vec3(0.08,0.10,0.15));
+  prog.setFloat('uFogDensity', 0.000055);
+  prog.setVec3('uFogColour', sky.getFogColour());
+
+  terrain.draw();
+
+  // HUD
+  const SEA=getSeaLevel();
+  const h=fbmTerrain(player.position.x, player.position.z, 0);
+  document.getElementById('coords').textContent =
+    `X:${Math.round(player.position.x)}  Z:${Math.round(player.position.z)}`+
+    `  H:${(h-SEA).toFixed(1)}${player.inWater?' ~WATER~':''}`;
+  document.getElementById('worldname').textContent = worldName();
+
+  // Only clear look deltas — movement state is held in keys{}
+  inp.lookDX=0; inp.lookDY=0;
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
