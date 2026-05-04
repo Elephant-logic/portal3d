@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: portal3d
+    runtime: static
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin
+      - path: /*
+        name: Cross-Origin-Embedder-Policy
+        value: require-corp
